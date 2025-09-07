@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xdb="http://www.borland.com/schemas/delphi/10.0/XMLDataBinding">
+  <xs:element name="recipes" type="recipesType"/>
+  <xs:complexType name="recipesType"><xs:annotation>
+      <xs:appinfo xdb:docElement="recipes"/>
+    </xs:annotation>
+    <sequence xmlns="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="recipe" type="recipeType" maxOccurs="unbounded"/>
+    </sequence>
+  </xs:complexType>
+  <xs:complexType name="recipeType">
+    <sequence xmlns="http://www.w3.org/2001/XMLSchema">
+      <xs:element name="ingredient" type="ingredientType" maxOccurs="unbounded"/>
+    </sequence>
+    <xs:attribute name="name" type="xs:string"/>
+    <xs:attribute name="difficulty" type="xs:integer"/>
+  </xs:complexType>
+  <xs:complexType name="ingredientType">
+    <xs:simpleContent>
+      <xs:extension base="xs:string">
+        <xs:attribute name="qty" type="xs:integer"/>
+      </xs:extension>
+    </xs:simpleContent>
+  </xs:complexType>
+</xs:schema>

@@ -1,0 +1,45 @@
+# -------- RAD Studio / C++Builder --------
+
+# Build mape (bilo gdje)
+**/Win32/Debug/
+**/Win32/Release/
+**/__history/
+**/__recovery/
+**/__astcache/
+
+# Binaries i intermediates (zadržavamo .dll!)
+*.exe
+*.obj
+*.tds
+*.map
+*.lib
+*.il?
+*.pdi
+*.res
+*.pch
+*.ild
+*.ilc
+*.ilf
+*.ils
+
+# IDE / user / lokalne postavke
+*.identcache
+*.dsk
+*.tvsconfig
+*.local
+*.cbproj.local
+*.dproj.local
+
+# Privremeni backupovi od IDE-a (npr. PostavkeForm.cpp.~38~)
+*.~[0-9]*~
+*.~*~
+
+# RAD Code-Insight/Intellisense cache (čudni nazivi s @)
+c@@*.*.json
+*@*@*.json
+
+# Slike logovi/arhive (po želji drži svoje fotke; ovo štiti repo od slučajnog zippanja)
+*.zip
+*.7z
+*.rar
+*.log
