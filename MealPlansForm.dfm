@@ -2,8 +2,8 @@ object FMealPlans: TFMealPlans
   Left = 306
   Top = 187
   Caption = 'Planovi prehrane'
-  ClientHeight = 663
-  ClientWidth = 1202
+  ClientHeight = 661
+  ClientWidth = 1194
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -16,11 +16,10 @@ object FMealPlans: TFMealPlans
   object TopUsers: TPanel
     Left = 0
     Top = 0
-    Width = 1202
+    Width = 1194
     Height = 220
     Align = alTop
     TabOrder = 0
-    ExplicitWidth = 1198
     object LblUsersSection: TLabel
       Left = 8
       Top = 42
@@ -37,11 +36,11 @@ object FMealPlans: TFMealPlans
     object UsersFilterBar: TPanel
       Left = 1
       Top = 1
-      Width = 1200
+      Width = 1196
       Height = 36
       Align = alTop
       TabOrder = 0
-      ExplicitWidth = 1196
+      ExplicitWidth = 1192
       object LblFilterUsers: TLabel
         Left = 8
         Top = 2
@@ -110,13 +109,13 @@ object FMealPlans: TFMealPlans
       end
     end
     object UsersRight: TPanel
-      Left = 971
+      Left = 967
       Top = 37
       Width = 230
       Height = 157
       Align = alRight
       TabOrder = 1
-      ExplicitLeft = 967
+      ExplicitLeft = 963
       object ImgPhoto: TImage
         Left = 1
         Top = 33
@@ -158,7 +157,7 @@ object FMealPlans: TFMealPlans
     object GridUsers: TDBGrid
       Left = 1
       Top = 37
-      Width = 970
+      Width = 966
       Height = 157
       Align = alClient
       DataSource = AppDataModule1.DSUsers
@@ -202,22 +201,21 @@ object FMealPlans: TFMealPlans
     object NavUsers: TDBNavigator
       Left = 1
       Top = 194
-      Width = 1200
+      Width = 1196
       Height = 25
       DataSource = AppDataModule1.DSUsers
       Align = alBottom
       TabOrder = 3
-      ExplicitWidth = 1196
+      ExplicitWidth = 1192
     end
   end
   object MidPlans: TPanel
     Left = 0
     Top = 220
-    Width = 1202
+    Width = 1194
     Height = 210
     Align = alTop
     TabOrder = 1
-    ExplicitWidth = 1198
     object LblPlansSection: TLabel
       Left = 8
       Top = 42
@@ -234,11 +232,11 @@ object FMealPlans: TFMealPlans
     object PlansTopBar: TPanel
       Left = 1
       Top = 1
-      Width = 1200
+      Width = 1196
       Height = 36
       Align = alTop
       TabOrder = 0
-      ExplicitWidth = 1196
+      ExplicitWidth = 1192
       object LblReporting: TLabel
         Left = 184
         Top = 5
@@ -289,7 +287,7 @@ object FMealPlans: TFMealPlans
     object GridPlans: TDBGrid
       Left = 1
       Top = 37
-      Width = 1200
+      Width = 1196
       Height = 147
       Align = alClient
       DataSource = AppDataModule1.DSMealPlans
@@ -342,23 +340,21 @@ object FMealPlans: TFMealPlans
     object NavPlans: TDBNavigator
       Left = 1
       Top = 184
-      Width = 1200
+      Width = 1196
       Height = 25
       DataSource = AppDataModule1.DSMealPlans
       Align = alBottom
       TabOrder = 2
-      ExplicitWidth = 1196
+      ExplicitWidth = 1192
     end
   end
   object BottomItems: TPanel
     Left = 0
     Top = 430
-    Width = 1202
-    Height = 233
+    Width = 1194
+    Height = 231
     Align = alClient
     TabOrder = 2
-    ExplicitWidth = 1198
-    ExplicitHeight = 232
     object LblItemsSection: TLabel
       Left = 8
       Top = 42
@@ -375,11 +371,11 @@ object FMealPlans: TFMealPlans
     object ItemsTopBar: TPanel
       Left = 1
       Top = 1
-      Width = 1200
+      Width = 1196
       Height = 36
       Align = alTop
       TabOrder = 0
-      ExplicitWidth = 1196
+      ExplicitWidth = 1192
       object LblMasterDetail: TLabel
         Left = 36
         Top = 17
@@ -430,8 +426,8 @@ object FMealPlans: TFMealPlans
     object GridItems: TDBGrid
       Left = 1
       Top = 37
-      Width = 1200
-      Height = 170
+      Width = 1196
+      Height = 169
       Align = alClient
       DataSource = AppDataModule1.DSPlanItems
       Options = [dgEditing, dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
@@ -494,14 +490,14 @@ object FMealPlans: TFMealPlans
     end
     object NavItems: TDBNavigator
       Left = 1
-      Top = 207
-      Width = 1200
+      Top = 206
+      Width = 1196
       Height = 25
       DataSource = AppDataModule1.DSPlanItems
       Align = alBottom
       TabOrder = 2
-      ExplicitTop = 206
-      ExplicitWidth = 1196
+      ExplicitTop = 205
+      ExplicitWidth = 1192
     end
     object MemoUDP: TMemo
       Left = 920

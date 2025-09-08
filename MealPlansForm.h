@@ -1,4 +1,4 @@
-#ifndef MealPlansFormH
+﻿#ifndef MealPlansFormH
 #define MealPlansFormH
 
 #include <Objbase.h>
@@ -77,7 +77,7 @@ class TFMealPlans : public TForm {
   TButton *BtnNotifyUDP;
   TButton *BtnGetThumbUDP;
 
-  // Doga�aji
+  // Dogaðaji
   void __fastcall FormShow(TObject *Sender);
   void __fastcall BtnFilterUserClick(TObject *Sender);
   void __fastcall BtnClearFiltersClick(TObject *Sender);
@@ -102,6 +102,11 @@ class TFMealPlans : public TForm {
 
   void __fastcall ShowFinalSummary(int usersCnt, int plansCnt, int itemsCnt,
                                    const System::UnicodeString &whenSummary);
+
+  // Guard protiv dvostrukog klika dok traje paralelno učitavanje
+  int FParallelFlag{0};                    // 0=slobodno, 1=zauzeto
+  bool __fastcall TryBeginParallelLoad();  // atomično zauzmi
+  void __fastcall EndParallelLoad();       // oslobodi
 
   int __fastcall LaunchPDFViewer(const System::UnicodeString &pdfPath);
 

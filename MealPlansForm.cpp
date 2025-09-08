@@ -34,6 +34,13 @@ static void UdpSendUtf8(TIdUDPClient *cli, const UnicodeString &s) {
   cli->SendBuffer(b);
 }
 
+bool __fastcall TFMealPlans::TryBeginParallelLoad() {
+  return TInterlocked::CompareExchange(FParallelFlag, 1, 0) == 0;
+}
+void __fastcall TFMealPlans::EndParallelLoad() {
+  TInterlocked::Exchange(FParallelFlag, 0);
+}
+
 TFMealPlans *FMealPlans = nullptr;
 
 void __fastcall TFMealPlans::FormShow(TObject *Sender) {
@@ -201,11 +208,18 @@ struct TSharedState {
   ~TSharedState() { delete cs; }
 };
 
-// ============ 11. ZADATAK: 4 paralelna posla (Thread Pool) ============
+// ============ 11. ZADATAK: 7 paralelnih stvari (3 COUNT + 4 WhenInDay
+// writer-a) ============
 void __fastcall TFMealPlans::BtnParallelLoadClick(TObject *) {
+  if (!TryBeginParallelLoad()) {
+    Application->MessageBox(L"Učitavanje je već u tijeku…", L"Info",
+                            MB_OK | MB_ICONINFORMATION);
+    return;
+  }
+
   LblReporting->Caption = L"Učitavam paralelno…";
 
-  auto state = new TSharedState();  // živi dok fin task ne završi
+  auto state = new TSharedState();
   const UnicodeString baseConnStr = AppDataModule1->Conn->ConnectionString;
 
   // A) Users COUNT
@@ -271,46 +285,56 @@ void __fastcall TFMealPlans::BtnParallelLoadClick(TObject *) {
     CoUninitialize();
   });
 
-  // D) Group by WhenInDay
-  _di_ITask tD = TTask::Create([=]() {
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    try {
-      std::unique_ptr<TADOConnection> c(MakeWorkerConn(baseConnStr));
-      std::unique_ptr<TADOQuery> q(new TADOQuery(nullptr));
-      q->Connection = c.get();
-      q->SQL->Text =
-          L"SELECT WhenInDay, COUNT(*) AS Cnt FROM PlanItems GROUP BY "
-          L"WhenInDay";
-      q->Open();
+  // D) 4 paralelna writer-a: Breakfast/Lunch/Snack/Dinner
+  const std::vector<UnicodeString> whens = {L"Breakfast", L"Lunch", L"Snack",
+                                            L"Dinner"};
+  std::vector<_di_ITask> tWhen;
+  tWhen.reserve(whens.size());
 
-      std::map<UnicodeString, int> local;
-      while (!q->Eof) {
-        UnicodeString w = q->FieldByName(L"WhenInDay")->AsString;
-        int cnt = q->FieldByName(L"Cnt")->AsInteger;
-        local[w] = cnt;
-        q->Next();
-      }
-      state->cs->Enter();
-      state->whenMap = std::move(local);
-      state->cs->Leave();
-    } catch (...) {
-      // ignoriraj
-    }
-    CoUninitialize();
-  });
+  for (const auto &w : whens) {
+    const UnicodeString wcopy = w;  // eksplicitna kopija
+    tWhen.push_back(
+        TTask::Create([=]() {  // hvata sve po kopiji, uključujući wcopy
+          CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+          try {
+            std::unique_ptr<TADOConnection> c(MakeWorkerConn(baseConnStr));
+            std::unique_ptr<TADOQuery> q(new TADOQuery(nullptr));
+            q->Connection = c.get();
+
+            q->SQL->Text =
+                L"SELECT COUNT(*) AS C FROM PlanItems WHERE WhenInDay LIKE :W";
+            TParameter *p = q->Parameters->ParamByName(L"W");
+            p->DataType = ftWideString;
+            p->Size = 32;
+            p->Value = Trim(wcopy);  // koristi wcopy umjesto w
+
+            q->Open();
+            const int cnt = q->FieldByName(L"C")->AsInteger;
+
+            state->cs->Enter();
+            state->whenMap[UpperCase(wcopy)] = cnt;  // wcopy
+            state->cs->Leave();
+          } catch (...) {
+            state->cs->Enter();
+            state->whenMap[UpperCase(wcopy)] = 0;  // wcopy
+            state->cs->Leave();
+          }
+          CoUninitialize();
+        }));
+  }
 
   // Start svih poslova
   tA->Start();
   tB->Start();
   tC->Start();
-  tD->Start();
+  for (auto &t : tWhen) t->Start();
 
   // "Join" + UI update + čišćenje
   _di_ITask fin = TTask::Create([=]() {
     tA->Wait();
     tB->Wait();
     tC->Wait();
-    tD->Wait();
+    for (auto &t : tWhen) t->Wait();
 
     // kopija mape bez locka
     std::map<UnicodeString, int> copy;
@@ -328,6 +352,7 @@ void __fastcall TFMealPlans::BtnParallelLoadClick(TObject *) {
       SafeRefreshDatasets();
       ShowFinalSummary(state->usersCnt, state->plansCnt, state->itemsCnt,
                        whenSummary);
+      EndParallelLoad();
     });
 
     delete state;  // oslobodi sve (i kritičnu sekciju)
@@ -381,8 +406,6 @@ void __fastcall TFMealPlans::BtnReportClick(TObject *) {
   const int uid = users->FieldByName(L"UserID")->AsInteger;
   AppDataModule1->FilterMealPlansByUserID(uid);
 
-  // === 13. zadatak: spriječi paralelni export (drugi mehanizam zaključavanja)
-  // ===
   if (!AppDataModule1->ReportEvent ||
       AppDataModule1->ReportEvent->WaitFor(0) != wrSignaled) {
     Application->MessageBox(L"Izvještaj se već generira…", L"Info",
