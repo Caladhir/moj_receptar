@@ -20,6 +20,7 @@ object FMealPlans: TFMealPlans
     Height = 220
     Align = alTop
     TabOrder = 0
+    ExplicitWidth = 1190
     object LblUsersSection: TLabel
       Left = 8
       Top = 42
@@ -36,11 +37,11 @@ object FMealPlans: TFMealPlans
     object UsersFilterBar: TPanel
       Left = 1
       Top = 1
-      Width = 1196
+      Width = 1192
       Height = 36
       Align = alTop
       TabOrder = 0
-      ExplicitWidth = 1192
+      ExplicitWidth = 1188
       object LblFilterUsers: TLabel
         Left = 8
         Top = 2
@@ -72,7 +73,7 @@ object FMealPlans: TFMealPlans
         OnClick = BtnFilterUserClick
       end
       object BtnClearFilters: TButton
-        Left = 356
+        Left = 348
         Top = 13
         Width = 90
         Height = 26
@@ -81,41 +82,56 @@ object FMealPlans: TFMealPlans
         OnClick = BtnClearFiltersClick
       end
       object BtnGetRecipesTCP: TButton
-        Left = 752
-        Top = 14
-        Width = 98
-        Height = 24
-        Caption = 'Preuzmi recepte'
+        Left = 491
+        Top = 2
+        Width = 211
+        Height = 33
+        Caption = 'PRIKA'#381'I BROJ PODIJELJENIH STAVKI'
+        Font.Charset = EASTEUROPE_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -12
+        Font.Name = 'Segoe UI Semibold'
+        Font.Style = [fsBold]
+        ParentFont = False
         TabOrder = 3
         OnClick = BtnGetRecipesTCPClick
       end
       object BtnUploadRecipeTCP: TButton
-        Left = 872
-        Top = 14
+        Left = 744
+        Top = 11
         Width = 92
         Height = 24
-        Caption = 'Podijeli recept'
+        Caption = 'Podijeli stavku'
         TabOrder = 4
         OnClick = BtnUploadRecipeTCPClick
       end
       object BtnGetPhotoTCP: TButton
-        Left = 1027
+        Left = 1059
         Top = 11
         Width = 126
         Height = 24
-        Caption = 'U'#269'itaj sliku (TCP)'
+        Caption = 'Oporavi sliku (TCP)'
         TabOrder = 5
         OnClick = BtnGetPhotoTCPClick
       end
+      object BtnBackupPhotoTCP: TButton
+        Left = 912
+        Top = 10
+        Width = 115
+        Height = 25
+        Caption = 'Backup slike (TCP)'
+        TabOrder = 6
+        OnClick = BtnBackupPhotoTCPClick
+      end
     end
     object UsersRight: TPanel
-      Left = 967
+      Left = 963
       Top = 37
       Width = 230
       Height = 157
       Align = alRight
       TabOrder = 1
-      ExplicitLeft = 963
+      ExplicitLeft = 959
       object ImgPhoto: TImage
         Left = 1
         Top = 33
@@ -157,11 +173,11 @@ object FMealPlans: TFMealPlans
     object GridUsers: TDBGrid
       Left = 1
       Top = 37
-      Width = 966
+      Width = 962
       Height = 157
       Align = alClient
       DataSource = AppDataModule1.DSUsers
-      Options = [dgEditing, dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
+      Options = [dgEditing, dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete]
       TabOrder = 2
       TitleFont.Charset = DEFAULT_CHARSET
       TitleFont.Color = clWindowText
@@ -201,12 +217,12 @@ object FMealPlans: TFMealPlans
     object NavUsers: TDBNavigator
       Left = 1
       Top = 194
-      Width = 1196
+      Width = 1192
       Height = 25
       DataSource = AppDataModule1.DSUsers
       Align = alBottom
       TabOrder = 3
-      ExplicitWidth = 1192
+      ExplicitWidth = 1188
     end
   end
   object MidPlans: TPanel
@@ -216,6 +232,7 @@ object FMealPlans: TFMealPlans
     Height = 210
     Align = alTop
     TabOrder = 1
+    ExplicitWidth = 1190
     object LblPlansSection: TLabel
       Left = 8
       Top = 42
@@ -232,11 +249,11 @@ object FMealPlans: TFMealPlans
     object PlansTopBar: TPanel
       Left = 1
       Top = 1
-      Width = 1196
+      Width = 1192
       Height = 36
       Align = alTop
       TabOrder = 0
-      ExplicitWidth = 1192
+      ExplicitWidth = 1188
       object LblReporting: TLabel
         Left = 184
         Top = 5
@@ -287,11 +304,11 @@ object FMealPlans: TFMealPlans
     object GridPlans: TDBGrid
       Left = 1
       Top = 37
-      Width = 1196
+      Width = 1192
       Height = 147
       Align = alClient
       DataSource = AppDataModule1.DSMealPlans
-      Options = [dgEditing, dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit, dgTitleClick]
+      Options = [dgEditing, dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete, dgTitleClick]
       TabOrder = 1
       TitleFont.Charset = DEFAULT_CHARSET
       TitleFont.Color = clWindowText
@@ -340,12 +357,12 @@ object FMealPlans: TFMealPlans
     object NavPlans: TDBNavigator
       Left = 1
       Top = 184
-      Width = 1196
+      Width = 1192
       Height = 25
       DataSource = AppDataModule1.DSMealPlans
       Align = alBottom
       TabOrder = 2
-      ExplicitWidth = 1192
+      ExplicitWidth = 1188
     end
   end
   object BottomItems: TPanel
@@ -355,6 +372,11 @@ object FMealPlans: TFMealPlans
     Height = 231
     Align = alClient
     TabOrder = 2
+    ExplicitWidth = 1190
+    ExplicitHeight = 230
+    DesignSize = (
+      1194
+      231)
     object LblItemsSection: TLabel
       Left = 8
       Top = 42
@@ -371,11 +393,11 @@ object FMealPlans: TFMealPlans
     object ItemsTopBar: TPanel
       Left = 1
       Top = 1
-      Width = 1196
+      Width = 1192
       Height = 36
       Align = alTop
       TabOrder = 0
-      ExplicitWidth = 1192
+      ExplicitWidth = 1188
       object LblMasterDetail: TLabel
         Left = 36
         Top = 17
@@ -404,30 +426,12 @@ object FMealPlans: TFMealPlans
         TabOrder = 0
         OnClick = BtnReportClick
       end
-      object BtnNotifyUDP: TButton
-        Left = 680
-        Top = 3
-        Width = 90
-        Height = 37
-        Caption = 'UDP notify'
-        TabOrder = 1
-        OnClick = BtnNotifyUDPClick
-      end
-      object BtnGetThumbUDP: TButton
-        Left = 816
-        Top = 3
-        Width = 105
-        Height = 37
-        Caption = 'UDP get thumb'
-        TabOrder = 2
-        OnClick = BtnGetThumbUDPClick
-      end
     end
     object GridItems: TDBGrid
       Left = 1
       Top = 37
-      Width = 1196
-      Height = 169
+      Width = 1192
+      Height = 168
       Align = alClient
       DataSource = AppDataModule1.DSPlanItems
       Options = [dgEditing, dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgAlwaysShowSelection, dgConfirmDelete, dgCancelOnExit]
@@ -437,6 +441,8 @@ object FMealPlans: TFMealPlans
       TitleFont.Height = -12
       TitleFont.Name = 'Segoe UI'
       TitleFont.Style = []
+      OnColEnter = GridItemsColEnter
+      OnExit = GridItemsExit
       Columns = <
         item
           Expanded = False
@@ -490,22 +496,25 @@ object FMealPlans: TFMealPlans
     end
     object NavItems: TDBNavigator
       Left = 1
-      Top = 206
-      Width = 1196
+      Top = 205
+      Width = 1192
       Height = 25
       DataSource = AppDataModule1.DSPlanItems
       Align = alBottom
       TabOrder = 2
-      ExplicitTop = 205
-      ExplicitWidth = 1192
+      ExplicitTop = 204
+      ExplicitWidth = 1188
     end
     object MemoUDP: TMemo
       Left = 920
       Top = 43
-      Width = 281
+      Width = 257
       Height = 166
+      Anchors = [akLeft, akTop, akRight, akBottom]
       ScrollBars = ssVertical
       TabOrder = 3
+      ExplicitWidth = 253
+      ExplicitHeight = 165
     end
   end
   object frxReport1: TfrxReport

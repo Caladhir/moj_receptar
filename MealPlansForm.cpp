@@ -52,6 +52,9 @@ void __fastcall TFMealPlans::FormShow(TObject *Sender) {
   IdUDPClient1->Port = 9090;
   IdUDPClient1->IPVersion = Id_IPv4;
   IdUDPClient1->ReceiveTimeout = 2000;
+
+  if (AppDataModule1->TPlanItems)
+    AppDataModule1->TPlanItems->AfterPost = PlanItemsAfterPost;
 }
 
 //
@@ -114,7 +117,12 @@ void __fastcall TFMealPlans::ShowCurrentUserPhoto() {
   if (!ds || ds->IsEmpty()) return;
 
   auto *bf = dynamic_cast<TBlobField *>(ds->FindField(L"Photo"));
-  if (!bf || bf->IsNull) return;
+  if (!bf || bf->IsNull) {
+    // Nema slike u bazi → povuci UDP placeholder (bez spamiranja mema)
+    const int uid = ds->FieldByName(L"UserID")->AsInteger;
+    FetchUdpThumb(uid, /*logToMemo*/ true);
+    return;
+  }
 
   std::unique_ptr<TMemoryStream> ms(new TMemoryStream());
   bf->SaveToStream(ms.get());
@@ -135,6 +143,17 @@ void __fastcall TFMealPlans::ShowCurrentUserPhoto() {
 void __fastcall TFMealPlans::GridPlansTitleClick(TColumn *Column) {
   if (Column && Column->Field)
     AppDataModule1->SortMealPlans(Column->Field->FieldName);
+}
+
+void __fastcall TFMealPlans::GridItemsExit(TObject *) {
+  auto ds = AppDataModule1->TPlanItems;
+  if (!ds) return;
+  if (ds->State == dsEdit || ds->State == dsInsert) {
+    if (Trim(ds->FieldByName(L"RecipeName")->AsString).IsEmpty())
+      ds->Cancel();
+    else
+      ds->Post();
+  }
 }
 
 // Pomoćno: sigurno osvježi datasets (na UI niti)
@@ -177,6 +196,12 @@ void __fastcall TFMealPlans::SafeRefreshDatasets() {
     }
   } catch (...) {
   }
+}
+
+//
+void __fastcall TFMealPlans::GridItemsColEnter(TObject *) {
+  auto items = AppDataModule1->TPlanItems;
+  if (items && items->Active && items->State == dsBrowse) items->Edit();
 }
 
 void __fastcall TFMealPlans::ShowFinalSummary(
@@ -452,22 +477,30 @@ void __fastcall TFMealPlans::BtnReportClick(TObject *) {
 // poveži se na server
 void __fastcall TFMealPlans::TcpConnect() {
   if (!IdTCPClient1->Connected()) {
-    IdTCPClient1->ConnectTimeout = 3000;
-    IdTCPClient1->ReadTimeout = 5000;
-    IdTCPClient1->Connect();
-    IdTCPClient1->IOHandler->DefStringEncoding = IndyTextEncoding_UTF8();
+    try {
+      IdTCPClient1->ConnectTimeout = 3000;
+      IdTCPClient1->ReadTimeout = 5000;
+      IdTCPClient1->Connect();
+      IdTCPClient1->IOHandler->DefStringEncoding = IndyTextEncoding_UTF8();
+    } catch (...) {
+      ShowMessage(
+          L"Ne mogu se spojiti na TCP server (127.0.0.1:8080). "
+          L"Pokreni server pa pokušaj ponovno.");
+      throw;
+    }
   }
 }
 
-// GET_RECIPES
 void __fastcall TFMealPlans::TcpGetRecipes() {
   TcpConnect();
   auto io = IdTCPClient1->IOHandler;
-  io->WriteLn(L"GET_RECIPES");
+  io->WriteLn(L"GET_SHARED_ITEMS");
+
   UnicodeString status = Trim(io->ReadLn());
   if (status == L"OK") {
-    UnicodeString list = io->ReadLn();
-    ShowMessage(L"Recepti: " + list);  // npr. "Spaghetti|Salad|Burger"
+    UnicodeString countLine = Trim(io->ReadLn());
+    int count = StrToIntDef(countLine, 0);
+    ShowMessage(L"Broj podijeljenih stavki: " + IntToStr(count));
   } else {
     ShowMessage(L"Greška: " + status);
   }
@@ -478,12 +511,16 @@ void __fastcall TFMealPlans::TcpGetUserPhoto(int userId) {
   TcpConnect();
   auto io = IdTCPClient1->IOHandler;
   io->WriteLn(L"GET_USER_PHOTO " + IntToStr(userId));
+
   UnicodeString hdr = Trim(io->ReadLn());
   if (hdr.Pos(L"STREAM ") == 1) {
-    int len = StrToIntDef(hdr.SubString(8, hdr.Length()), 0);
+    const int len = StrToIntDef(hdr.SubString(8, hdr.Length()), 0);
+
     std::unique_ptr<TMemoryStream> ms(new TMemoryStream());
     io->ReadStream(ms.get(), len, false);
     ms->Position = 0;
+
+    // 1) Prikaži u ImgPhoto
     try {
       ImgPhoto->Picture->LoadFromStream(ms.get());
     } catch (...) {
@@ -492,35 +529,134 @@ void __fastcall TFMealPlans::TcpGetUserPhoto(int userId) {
       bmp->LoadFromStream(ms.get());
       ImgPhoto->Picture->Assign(bmp.get());
     }
+
+    // 2) Zapiši u bazu (Users.Photo)
+    auto users = AppDataModule1->TUsers;
+    if (users && !users->IsEmpty()) {
+      auto *bf = dynamic_cast<TBlobField *>(users->FindField(L"Photo"));
+      if (bf) {
+        users->Edit();
+        ms->Position = 0;
+        bf->LoadFromStream(ms.get());
+        users->Post();
+      }
+    }
+
+    // 3) Potvrda korisniku i log u memo
+    ShowMessage(L"Oporavak slike uspješan. Primljeno " + IntToStr(len) +
+                L" B.");
+    if (MemoUDP)
+      MemoUDP->Lines->Add(L"TCP RESTORE uid=" + IntToStr(userId) + L" ← " +
+                          IntToStr(len) + L" B");
+
   } else {
-    ShowMessage(L"Greška: " + hdr);  // npr. ERR NOFILE
+    // Greška (npr. ERR NOFILE)
+    ShowMessage(L"Greška pri oporavku: " + hdr);
+    if (MemoUDP)
+      MemoUDP->Lines->Add(L"TCP RESTORE ERROR uid=" + IntToStr(userId) +
+                          L" ← " + hdr);
   }
 }
 
 // UPLOAD_RECIPE (pošalji mali tekst kao stream)
-void __fastcall TFMealPlans::TcpUploadRecipe(const UnicodeString &name,
-                                             const UnicodeString &category) {
-  TcpConnect();
-  UnicodeString payload = name + L"|" + category;
+void __fastcall TFMealPlans::TcpUploadRecipe(const UnicodeString &,
+                                             const UnicodeString &) {
+  // 1) Uhvati trenutno odabranu stavku
+  auto items = AppDataModule1->TPlanItems;
+  if (!items || items->IsEmpty()) {
+    ShowMessage(L"Nema odabrane stavke za dijeljenje.");
+    return;
+  }
+  if (items->State == dsEdit || items->State == dsInsert) {
+    if (Trim(items->FieldByName(L"RecipeName")->AsString).IsEmpty())
+      items->Cancel();
+    else
+      items->Post();
+  }
 
-  // Pretvori u Indy bajtove (nema konflikta s FastReport TBytes)
+  const int itemId = items->FieldByName(L"ItemID")->AsInteger;
+  const UnicodeString recipe =
+      Trim(items->FieldByName(L"RecipeName")->AsString);
+  const UnicodeString when = Trim(items->FieldByName(L"WhenInDay")->AsString);
+  const int servings = items->FieldByName(L"Servings")->AsInteger;
+  const UnicodeString comment = Trim(items->FieldByName(L"Comment")->AsString);
+  UnicodeString planName;
+  if (items->FindField(L"PlanNameLkp"))
+    planName = Trim(items->FieldByName(L"PlanNameLkp")->AsString);
+
+  // 2) Sastavi payload (jedna linija teksta)
+  UnicodeString payload = L"ItemID=" + IntToStr(itemId) + L"|Plan=" + planName +
+                          L"|Recipe=" + recipe + L"|When=" + when +
+                          L"|Servings=" + IntToStr(servings) + L"|Comment=" +
+                          comment;
+
   Idglobal::TIdBytes bytes =
       Idglobal::ToBytes(payload, IndyTextEncoding_UTF8());
 
+  // 3) Pošalji
+  TcpConnect();
   auto io = IdTCPClient1->IOHandler;
-  io->WriteLn(L"UPLOAD_RECIPE");
+  io->WriteLn(L"UPLOAD_SHARED_ITEM");
   io->WriteLn(L"STREAM " + IntToStr(bytes.Length));
-  if (bytes.Length > 0) {
-    io->Write(bytes);
-  }
+  if (bytes.Length > 0) io->Write(bytes);
 
-  UnicodeString resp = Trim(io->ReadLn());
-  ShowMessage(L"Server: " + resp);  // "OK" ili poruka greške
+  UnicodeString resp = Trim(io->ReadLn());  // očekujemo "OK"
+  ShowMessage(L"Server: " + resp);
 }
 
 void __fastcall TFMealPlans::BtnGetRecipesTCPClick(TObject *) {
   TcpConnect();
   TcpGetRecipes();
+}
+
+//
+void __fastcall TFMealPlans::BtnBackupPhotoTCPClick(TObject *) {
+  auto ds = AppDataModule1->TUsers;
+  if (!ds || ds->IsEmpty()) {
+    ShowMessage(L"Izaberite korisnika.");
+    return;
+  }
+  const int uid = ds->FieldByName(L"UserID")->AsInteger;
+
+  auto *bf = dynamic_cast<TBlobField *>(ds->FindField(L"Photo"));
+  if (!bf || bf->IsNull) {
+    ShowMessage(L"Nema slike u bazi za backup.");
+    return;
+  }
+
+  // pripremi payload (JPG ako možemo, inače RAW)
+  std::unique_ptr<TMemoryStream> ms(new TMemoryStream());
+  bf->SaveToStream(ms.get());
+  ms->Position = 0;
+
+  std::unique_ptr<TMemoryStream> payload(new TMemoryStream());
+  try {
+    std::unique_ptr<TPicture> pic(new TPicture());
+    pic->LoadFromStream(ms.get());
+    std::unique_ptr<Vcl::Imaging::Jpeg::TJPEGImage> jpg(
+        new Vcl::Imaging::Jpeg::TJPEGImage());
+    jpg->Assign(pic->Graphic);
+    jpg->CompressionQuality = 90;
+    jpg->SaveToStream(payload.get());
+  } catch (...) {
+    ms->Position = 0;
+    payload->CopyFrom(ms.get(), 0);  // RAW fallback
+  }
+  payload->Position = 0;
+
+  // TCP zahtjev
+  TcpConnect();
+  TIdIOHandler *io = IdTCPClient1->IOHandler;  // <-- deklaracija 'io'
+  io->WriteLn(L"BACKUP_USER_PHOTO " + IntToStr(uid));
+  io->WriteLn(L"STREAM " + IntToStr((int)payload->Size));
+  if (payload->Size) io->Write(payload.get(), (int)payload->Size, false);
+
+  // odgovor servera
+  UnicodeString resp = Trim(io->ReadLn());  // <-- samo JEDNOM definiraj 'resp'
+  ShowMessage(L"Backup završio: " +
+              resp);  // npr. “OK SAVED” / “OK RAW” / “ERR …”
+  if (MemoUDP)
+    MemoUDP->Lines->Add(L"TCP BACKUP uid=" + IntToStr(uid) + L" → " + resp);
 }
 
 void __fastcall TFMealPlans::BtnGetPhotoTCPClick(TObject *) {
@@ -546,180 +682,139 @@ void __fastcall TFMealPlans::BtnUploadRecipeTCPClick(TObject *) {
 }
 
 // ============ UDP – jednostavne poruke ============
-void __fastcall TFMealPlans::BtnNotifyUDPClick(TObject *) {
-  // PING
-  UdpSendUtf8(IdUDPClient1, L"PING");
-  MemoUDP->Lines->Add(L"UDP→ PING");
-  UnicodeString pong =
-      IdUDPClient1->ReceiveString();  // koristi ReceiveTimeout iz svojstva
-  if (!pong.IsEmpty())
-    MemoUDP->Lines->Add(L"UDP← " + pong);
-  else
-    MemoUDP->Lines->Add(L"UDP timeout (PING).");
+void __fastcall TFMealPlans::PlanItemsAfterPost(TDataSet *ds) {
+  try {
+    const int itemId = ds->FieldByName(L"ItemID")->AsInteger;
+    const UnicodeString ts = FormatDateTime(L"yyyy-mm-dd hh:nn:ss", Now());
+    const UnicodeString human =
+        L"MealPlanItem br. " + IntToStr(itemId) + L" izmijenjen u " + ts;
 
-  // PLAN_UPDATED |<PlanID>|<timestamp>
-  int planId = 0;
-  if (AppDataModule1->TMealPlans && !AppDataModule1->TMealPlans->IsEmpty())
-    planId = AppDataModule1->TMealPlans->FieldByName(L"PlanID")->AsInteger;
+    // 1) Pošalji kratku UDP poruku (jedan datagram, bez fragmentacije)
+    const UnicodeString wire = L"UPDATE_ITEM " + IntToStr(itemId) + L"|" + ts;
+    UdpSendUtf8(IdUDPClient1, wire);
 
-  UnicodeString msg = L"PLAN_UPDATED|" + IntToStr(planId) + L"|" +
-                      FormatDateTime(L"yyyy-mm-dd hh:nn:ss", Now());
-
-  UdpSendUtf8(IdUDPClient1, msg);
-  MemoUDP->Lines->Add(L"UDP→ " + msg);
-
-  UnicodeString ack = IdUDPClient1->ReceiveString();
-  if (!ack.IsEmpty())
-    MemoUDP->Lines->Add(L"UDP← " + ack);
-  else
-    MemoUDP->Lines->Add(L"UDP timeout (ACK).");
+    // 2) Prikaži lokalno u memo
+    if (MemoUDP) {
+      MemoUDP->Lines->Add(L"UDP→ " + wire);
+      // pročitaj (neobavezno) ACK od servera
+      UnicodeString ack = IdUDPClient1->ReceiveString();
+      if (!ack.IsEmpty()) MemoUDP->Lines->Add(L"UDP← " + ack);
+    }
+  } catch (...) {
+    if (MemoUDP) MemoUDP->Lines->Add(L"(greška pri slanju UPDATE_ITEM)");
+  }
 }
 
 // THUMBNAIL
-void __fastcall TFMealPlans::BtnGetThumbUDPClick(TObject *) {
-  auto ds = AppDataModule1->TUsers;
-  if (!ds || ds->IsEmpty()) {
-    Application->MessageBox(L"Izaberite korisnika.", L"Info",
-                            MB_OK | MB_ICONINFORMATION);
-    return;
-  }
-  const int uid = ds->FieldByName(L"UserID")->AsInteger;
+void __fastcall TFMealPlans::FetchUdpThumb(int uid, bool logToMemo) {
+  try {
+    UdpSendUtf8(IdUDPClient1, L"GET_THUMB " + IntToStr(uid));
+    if (logToMemo) MemoUDP->Lines->Add(L"UDP→ GET_THUMB " + IntToStr(uid));
 
-  // zahtjev
-  UdpSendUtf8(IdUDPClient1, L"GET_THUMB " + IntToStr(uid));
-  MemoUDP->Lines->Add(L"UDP→ GET_THUMB " + IntToStr(uid));
-
-  // ===== 1) BEGIN =====
-  UnicodeString first = IdUDPClient1->ReceiveString();
-  if (first.IsEmpty()) {
-    MemoUDP->Lines->Add(L"UDP timeout (BEGIN).");
-    return;
-  }
-  if (first.Pos(L"ERR") == 1) {
-    ShowMessage(first);
-    return;
-  }
-  if (first.Pos(L"B64 BEGIN ") != 1) {
-    MemoUDP->Lines->Add(L"Neočekivan odgovor: " + first);
-    return;
-  }
-
-  // "B64 BEGIN <total> [<origLen>]"
-  int total = 0, origLen = 0;
-  {
-    int p1 = first.Pos(L" ");  // nakon "B64"
-    if (p1 <= 0) {
-      MemoUDP->Lines->Add(L"BEGIN split err.");
+    UnicodeString first = IdUDPClient1->ReceiveString();
+    if (first.IsEmpty()) {
+      if (logToMemo) MemoUDP->Lines->Add(L"UDP timeout (BEGIN).");
       return;
     }
-    UnicodeString afterB64 =
-        first.SubString(p1 + 1, first.Length() - p1);  // "BEGIN <...>"
-    int p2 = afterB64.Pos(L" ");                       // nakon "BEGIN"
-    if (p2 <= 0) {
-      MemoUDP->Lines->Add(L"BEGIN split err.");
+    if (first.Pos(L"ERR") == 1) {
+      if (logToMemo) MemoUDP->Lines->Add(first);
       return;
     }
-    UnicodeString afterBegin =
-        afterB64.SubString(p2 + 1, afterB64.Length() - p2);  // "<total> [orig]"
-    int p3 = afterBegin.Pos(L" ");
-    if (p3 > 0) {
-      total = StrToIntDef(afterBegin.SubString(1, p3 - 1), 0);
-      origLen = StrToIntDef(
-          afterBegin.SubString(p3 + 1, afterBegin.Length() - p3), 0);
-    } else {
-      total = StrToIntDef(afterBegin, 0);
-    }
-  }
-  if (total <= 0) {
-    MemoUDP->Lines->Add(L"Prazno.");
-    return;
-  }
-  MemoUDP->Lines->Add(L"BEGIN: očekujem " + IntToStr(total) + L" fragmenata…");
-
-  // ===== 2) FRAGMENTI =====
-  std::vector<UnicodeString> parts(total + 1);
-  int received = 0;
-  while (received < total) {
-    UnicodeString line = IdUDPClient1->ReceiveString();
-    if (line.IsEmpty()) {
-      MemoUDP->Lines->Add(L"Fragment timeout.");
-      return;
-    }
-    if (line.Pos(L"B64 ") != 1) {
-      MemoUDP->Lines->Add(L"Krivi fragment: " + line);
+    if (first.Pos(L"B64 BEGIN ") != 1) {
+      if (logToMemo) MemoUDP->Lines->Add(L"Neočekivan odgovor: " + first);
       return;
     }
 
-    int sp1 = line.Pos(L" ");  // iza "B64"
-    if (sp1 <= 0) {
-      MemoUDP->Lines->Add(L"Split err.");
-      return;
+    int total = 0, origLen = 0;
+    {
+      int p1 = first.Pos(L" ");
+      if (p1 <= 0) return;
+      UnicodeString afterB64 = first.SubString(p1 + 1, first.Length() - p1);
+      int p2 = afterB64.Pos(L" ");
+      if (p2 <= 0) return;
+      UnicodeString afterBegin =
+          afterB64.SubString(p2 + 1, afterB64.Length() - p2);
+      int p3 = afterBegin.Pos(L" ");
+      if (p3 > 0) {
+        total = StrToIntDef(afterBegin.SubString(1, p3 - 1), 0);
+        origLen = StrToIntDef(
+            afterBegin.SubString(p3 + 1, afterBegin.Length() - p3), 0);
+      } else {
+        total = StrToIntDef(afterBegin, 0);
+      }
     }
-    UnicodeString rest =
-        line.SubString(sp1 + 1, line.Length() - sp1);  // "i/n <payload>"
-    int sp2 = rest.Pos(L" ");
-    if (sp2 <= 0) {
-      MemoUDP->Lines->Add(L"Split err.");
-      return;
-    }
+    if (total <= 0) return;
+    if (logToMemo)
+      MemoUDP->Lines->Add(L"BEGIN: očekujem " + IntToStr(total) +
+                          L" fragmenata…");
 
-    UnicodeString idxTok = rest.SubString(1, sp2 - 1);  // "i/n"
-    int slash = idxTok.Pos(L"/");
-    int idx = StrToIntDef(idxTok.SubString(1, slash - 1), 0);
+    std::vector<UnicodeString> parts(total + 1);
+    int received = 0;
+    while (received < total) {
+      UnicodeString line = IdUDPClient1->ReceiveString();
+      if (line.IsEmpty()) {
+        if (logToMemo) MemoUDP->Lines->Add(L"Fragment timeout.");
+        return;
+      }
+      if (line.Pos(L"B64 ") != 1) {
+        if (logToMemo) MemoUDP->Lines->Add(L"Krivi fragment: " + line);
+        return;
+      }
 
-    UnicodeString payload = rest.SubString(sp2 + 1, rest.Length() - sp2);
+      int sp1 = line.Pos(L" ");
+      if (sp1 <= 0) return;
+      UnicodeString rest =
+          line.SubString(sp1 + 1, line.Length() - sp1);  // "i/n <payload>"
+      int sp2 = rest.Pos(L" ");
+      if (sp2 <= 0) return;
 
-    if (idx >= 1 && idx <= total) {
-      if (parts[idx].IsEmpty()) {
+      UnicodeString idxTok = rest.SubString(1, sp2 - 1);  // "i/n"
+      int slash = idxTok.Pos(L"/");
+      int idx = StrToIntDef(idxTok.SubString(1, slash - 1), 0);
+      UnicodeString payload = rest.SubString(sp2 + 1, rest.Length() - sp2);
+
+      if (idx >= 1 && idx <= total && parts[idx].IsEmpty()) {
         parts[idx] = payload;
         ++received;
-        if ((received % 10) == 0 || received == total)
+        if (logToMemo && ((received % 10) == 0 || received == total))
           MemoUDP->Lines->Add(L"Primljeno " + IntToStr(received) + L"/" +
                               IntToStr(total));
       }
     }
-  }
 
-  // ===== 3) END (nebitno, samo pročitamo) =====
-  UnicodeString ending = IdUDPClient1->ReceiveString();
-  if (ending != L"B64 END")
-    MemoUDP->Lines->Add(L"Upozorenje: kraj nije stigao: " + ending);
+    UnicodeString ending = IdUDPClient1->ReceiveString();
+    if (logToMemo && ending != L"B64 END")
+      MemoUDP->Lines->Add(L"Upozorenje: kraj nije stigao: " + ending);
 
-  // ===== 4) Spoji base64 i dekodiraj =====
-  UnicodeString all;
-  all.SetLength(0);
-  for (int i = 1; i <= total; ++i) all += parts[i];
+    UnicodeString all;
+    for (int i = 1; i <= total; ++i) all += parts[i];
 
-  // Dekodiranje ISTOM bibliotekom kao na serveru
-  System::Sysutils::TBytes raw = TNetEncoding::Base64->DecodeStringToBytes(all);
+    System::Sysutils::TBytes raw =
+        TNetEncoding::Base64->DecodeStringToBytes(all);
 
-  // (opcionalno) dijagnostika – snimi što je stiglo
-  try {
-    std::unique_ptr<TFileStream> dbg(new TFileStream(
-        ExtractFilePath(ParamStr(0)) + L"udp_last.jpg", fmCreate));
-    if (raw.Length) dbg->WriteBuffer(&raw[0], raw.Length);
-  } catch (...) {
-  }
-
-  // Učitaj u TImage
-  std::unique_ptr<TMemoryStream> ms(new TMemoryStream());
-  if (raw.Length) ms->WriteBuffer(&raw[0], raw.Length);
-  ms->Position = 0;
-  try {
-    ImgPhoto->Picture->LoadFromStream(ms.get());  // auto JPEG/PNG
-  } catch (...) {
+    // ubacivanje u TIMAGE
+    std::unique_ptr<TMemoryStream> ms(new TMemoryStream());
+    if (raw.Length) ms->WriteBuffer(&raw[0], raw.Length);
     ms->Position = 0;
     try {
-      std::unique_ptr<Vcl::Imaging::Pngimage::TPngImage> png(
-          new Vcl::Imaging::Pngimage::TPngImage());
-      png->LoadFromStream(ms.get());
-      ImgPhoto->Picture->Assign(png.get());
+      ImgPhoto->Picture->LoadFromStream(ms.get());
     } catch (...) {
-      ShowMessage(L"Primljeni podaci nisu valjana slika.");
-      return;
+      ms->Position = 0;
+      try {
+        std::unique_ptr<Vcl::Imaging::Pngimage::TPngImage> png(
+            new Vcl::Imaging::Pngimage::TPngImage());
+        png->LoadFromStream(ms.get());
+        ImgPhoto->Picture->Assign(png.get());
+      } catch (...) {
+        if (logToMemo)
+          MemoUDP->Lines->Add(L"Primljeni podaci nisu valjana slika.");
+      }
     }
+  } catch (...) {
+    if (logToMemo) MemoUDP->Lines->Add(L"Greška pri dohvaćanju thumbnaila.");
   }
 }
+
 //
 // ============ ADD ITEM BUTTON ============
 //

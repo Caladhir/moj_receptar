@@ -1,0 +1,1 @@
+ItemID=20|Plan=Srijeda|Recipe=Lazanje|When=snack|Servings=4|Comment=komentar

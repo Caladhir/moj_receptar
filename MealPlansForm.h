@@ -74,8 +74,7 @@ class TFMealPlans : public TForm {
   TButton *BtnGetPhotoTCP;
   TIdUDPClient *IdUDPClient1;
   TMemo *MemoUDP;
-  TButton *BtnNotifyUDP;
-  TButton *BtnGetThumbUDP;
+  TButton *BtnBackupPhotoTCP;
 
   // Dogaðaji
   void __fastcall FormShow(TObject *Sender);
@@ -86,15 +85,17 @@ class TFMealPlans : public TForm {
   void __fastcall GridPlansTitleClick(TColumn *Column);
   void __fastcall BtnReportClick(TObject *Sender);
   void __fastcall DSUsersDataChange(TObject *Sender, TField *Field);
-  //  void __fastcall BtnAddItemClick(TObject *Sender);
+  void __fastcall GridItemsColEnter(TObject *Sender);
   void __fastcall BtnParallelLoadClick(TObject *Sender);
 
   void __fastcall BtnGetRecipesTCPClick(TObject *Sender);
   void __fastcall BtnGetPhotoTCPClick(TObject *Sender);
   void __fastcall BtnUploadRecipeTCPClick(TObject *Sender);
+  void __fastcall BtnBackupPhotoTCPClick(TObject *Sender);
 
-  void __fastcall BtnNotifyUDPClick(TObject *Sender);
-  void __fastcall BtnGetThumbUDPClick(TObject *Sender);
+  void __fastcall FetchUdpThumb(int uid, bool logToMemo);
+
+  void __fastcall GridItemsExit(TObject *Sender);
 
  private:
   void __fastcall ShowCurrentUserPhoto();
@@ -110,12 +111,15 @@ class TFMealPlans : public TForm {
 
   int __fastcall LaunchPDFViewer(const System::UnicodeString &pdfPath);
 
-  // SERVER
+  // tcp SERVER
   void __fastcall TcpConnect();
   void __fastcall TcpGetRecipes();
   void __fastcall TcpGetUserPhoto(int userId);
   void __fastcall TcpUploadRecipe(const UnicodeString &name,
+
                                   const UnicodeString &category);
+  // udp
+  void __fastcall PlanItemsAfterPost(TDataSet *DataSet);
 
  public:
   __fastcall TFMealPlans(TComponent *Owner) : TForm(Owner) {}
